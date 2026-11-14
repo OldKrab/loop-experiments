@@ -130,6 +130,47 @@ Run on 2026-11-14 with `uv run python src/bench.py --task feature --modes dynami
 - **Conclusion for this harness and price list:** threshold-triggered summarization does not pay at 60–70k contexts with a 50× cache discount. Leaving it off is cheapest. It would pay with a much bigger context (relative to the window, or past the point where quality degrades), with a smaller cache discount, or if it fired at task boundaries (after a ticket is resolved) instead of mid-ticket.
 - **Caveat:** N=3. The off runs alone vary from 5.8¢ to 7.5¢.
 
+## Feature-xl task
+
+Run on 2026-11-14 with `uv run python src/bench.py --task feature-xl --modes dynamic --compact-at 0,60000,100000 -n 3 -j 9 --max-turns 400`. Prices are as above.
+
+- **Task:** the feature task with 10 tickets instead of 4. It adds MM-205..210: `Meta.dump_skip_none`, `validate.Each`, `fields.Interval`, `Meta.strip_strings`, `fields.Masked`, and `Schema.json_schema()`, which builds on the earlier tickets. Judging works the same way, with hidden tests for every ticket.
+- **Thresholds:** two calibration runs without compaction peaked at 111k and 136k tokens, so a 150k threshold would never fire. 100k fires once, late in the run. 60k fires 2–3 times.
+
+### Summary (means of 3 runs)
+
+| compact-at | success | turns | input | cached input | uncached input | output | peak context | compactions | cost | seconds |
+|---|---|---|---|---|---|---|---|---|---|---|
+| off | 3/3 | 132 | 8,124,436 | 8,063,360 | 61,076 | 70,611 | 118.5k | 0 | 15.14¢ | 458 |
+| 100000 | 3/3 | 120 | 5,992,119 | 5,905,493 | 86,626 | 65,815 | 99.6k | 1 | 14.04¢ (−7%) | 424 |
+| 60000 | 1/3 | 157 | 5,692,713 | 5,571,584 | 121,129 | 82,185 | 59.8k | 2.7 | 16.84¢ (+11%) | 525 |
+
+### Per run
+
+| compact-at | run | success | turns | input | output | peak | compactions | cost | load_skill / load_tools |
+|---|---|---|---|---|---|---|---|---|---|
+| off | 1 | yes | 122 | 7,057,268 | 65,881 | 112,189 | 0 | 13.84¢ | 3 / 2 |
+| off | 2 | yes | 120 | 6,985,787 | 66,985 | 111,584 | 0 | 13.93¢ | 2 / 2 |
+| off | 3 | yes | 154 | 10,330,253 | 78,968 | 131,821 | 0 | 17.67¢ | 2 / 1 |
+| 100000 | 1 | yes | 104 | 4,945,915 | 63,341 | 99,747 | 1 | 12.97¢ | 3 / 2 |
+| 100000 | 2 | yes | 120 | 6,103,228 | 59,105 | 99,969 | 1 | 13.24¢ | 2 / 2 |
+| 100000 | 3 | yes | 137 | 6,927,213 | 74,999 | 99,108 | 1 | 15.90¢ | 3 / 2 |
+| 60000 | 1 | yes | 127 | 4,424,100 | 66,859 | 59,847 | 2 | 13.61¢ | 3 / 3 |
+| 60000 | 2 | no | 149 | 5,308,197 | 93,892 | 59,544 | 3 | 18.05¢ | 3 / 2 |
+| 60000 | 3 | no | 195 | 7,345,842 | 85,803 | 59,885 | 3 | 18.86¢ | 2 / 5 |
+
+The two calibration runs without compaction (104 and 128 turns, 13.19¢ and 17.29¢, both 10/10) fall in the same range as the off row.
+
+### Observations
+
+- **A single late compaction at 100k is slightly cheaper, and no less reliable.** It cuts total input by 26% and cost by 7%, with 3/3 runs succeeding. The 2.1M cached tokens it removes save about 1.3¢. The extra 26k uncached tokens cost about 0.8¢, and output did not grow. This is the case predicted by the feature task: compaction pays only when the context it removes is large and many turns follow it. The difference is within the noise, though: the off runs alone range from 13.2¢ to 17.7¢.
+- **At 60k the feature-task pattern returns:** more turns (+19%), double the uncached input, +11% cost, and two failures.
+  - **Run 3 lost the process.** All 10 tickets pass their hidden tests. However, after a compaction the agent did not re-load `feature-workflow`, and from MM-203 on it wrote `**Summary**` headings instead of the required `Summary:` lines. The summary said "Summary/Changes/Tests/CI" but not the exact format. This is the same failure as the 22k run on the feature task.
+  - **Run 2 missed one spec line.** MM-207's `Interval` works but is not in `fields.__all__`, so one hidden test fails. MM-207 was done between two compactions, after the ticket was fetched again, so this is not clearly caused by compaction.
+- **The compaction cost model holds.** Compacting from C to about 20k saves roughly (C − 20k) cached tokens on each of the T turns that follow. It costs one summary call, the re-reads (uncached input and extra turns), and the risk of losing the process. At a 50× cache discount, a one-off saving needs C ≈ 100k and T ≈ 30+ to show.
+- **Caveat:** N=3. A threshold that fires once per run needs more runs to separate a 7% saving from noise.
+- **Working conclusion (no further runs):** compaction is taken to pay off for sessions that grow past about 150k tokens, with the threshold set near 100k or above. Below that, leaving it off is cheaper and safer.
+
 ## Prompt cache (`TASK.md` question 1)
 
 Prefix caches (vLLM, SGLang, llama.cpp, and hosted APIs) reuse a request's KV cache only up to the first token that differs from an earlier request. The harness therefore treats the request as `[tools][system][task][checkpoint][append-only turns]` and changes it only from the right:

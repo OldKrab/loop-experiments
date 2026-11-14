@@ -16,6 +16,8 @@ TASKS = {
              "per team process."),
     "feature": ("demo-feature", "feature",
                 "Work through the open feature tickets in the issue tracker, oldest first, per team process."),
+    "feature-xl": ("demo-feature", "feature-xl",
+                   "Work through the open feature tickets in the issue tracker, oldest first, per team process."),
 }
 # USD per 1M tokens: deepseek-flash at peak hours (https://api-docs.deepseek.com/quick_start/pricing, 2026-11-14).
 PRICE_UNCACHED, PRICE_CACHED, PRICE_OUTPUT = 0.30, 0.006, 1.20

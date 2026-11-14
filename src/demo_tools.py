@@ -4,7 +4,7 @@ Their state lives only in this process, so the model can reach it through these 
 not through bash. Each tool is a plain function plus a hand-written schema, registered in TOOLS.
 `ci_run_pipeline` is the one real tool: it runs pytest in the agent's working directory.
 The seed data depends on the scenario in DEMO_SCENARIO: `short` (project demo/), `long` (demo-long/) or
-`feature` (demo-feature/).
+`feature` or `feature-xl` (demo-feature/, 4 or 10 tickets).
 """
 import copy
 import os
@@ -154,8 +154,9 @@ def _long_seed() -> dict:
     return seed
 
 
-def _feature_seed() -> dict:
-    """Four detailed feature tickets for marshmallow 4.4.0 (project demo-feature/), done one after another, plus
+def _feature_seed(xl: bool = False) -> dict:
+    """Four (ten with `xl`) detailed feature tickets for marshmallow 4.4.0 (project demo-feature/), done one after
+    another, plus
     distractors: a ticket someone else owns, a docs ticket, and an unrelated alert. Ticket texts live in
     demo_data/feature/<key>.md; check.py runs the hidden tests in demo_data/feature/acceptance/."""
     seed = copy.deepcopy(SEED)
@@ -180,6 +181,15 @@ def _feature_seed() -> dict:
         "MM-203": ticket("MM-203", "Add Meta.key_case option for camelCase and kebab-case keys"),
         "MM-204": ticket("MM-204", "Add fields.Union for values with several possible shapes"),
     }
+    if xl:
+        seed["issues"] |= {
+            "MM-205": ticket("MM-205", "Add Meta.dump_skip_none option"),
+            "MM-206": ticket("MM-206", "Add validate.Each for per-item validation"),
+            "MM-207": ticket("MM-207", "Add fields.Interval for start/end pairs"),
+            "MM-208": ticket("MM-208", "Add Meta.strip_strings option"),
+            "MM-209": ticket("MM-209", "Add fields.Masked for partially hidden values"),
+            "MM-210": ticket("MM-210", "Add Schema.json_schema() export"),
+        }
     seed["ci_runs"] = {
         "5119": {"id": "5119", "branch": "main", "status": "passed", "commit": "a38b7f6",
                  "summary": "1192 passed (tag 4.4.0)", "log": "$ python -m pytest -q\n1192 passed in 1.5s\n",
@@ -199,13 +209,14 @@ def _feature_seed() -> dict:
     return seed
 
 
-SEEDS = {"short": SEED, "long": _long_seed(), "feature": _feature_seed()}
+SEEDS = {"short": SEED, "long": _long_seed(), "feature": _feature_seed(), "feature-xl": _feature_seed(xl=True)}
 # (alert, linked issue) pairs that check.py judges; None: the agent must create the issue.
 INCIDENTS = {"short": [("ALERT-7", "PAY-142")],
-             "long": [("ALERT-7", "PAY-142"), ("ALERT-9", "PAY-143"), ("ALERT-10", None)], "feature": []}
+             "long": [("ALERT-7", "PAY-142"), ("ALERT-9", "PAY-143"), ("ALERT-10", None)],
+             "feature": [], "feature-xl": []}
 # Feature tickets that check.py judges with hidden acceptance tests, and tickets the agent must leave alone.
-TICKETS = {"feature": ["MM-201", "MM-202", "MM-203", "MM-204"]}
-UNTOUCHED = {"feature": ["MM-200"]}
+TICKETS = {"feature": [f"MM-{n}" for n in range(201, 205)], "feature-xl": [f"MM-{n}" for n in range(201, 211)]}
+UNTOUCHED = {"feature": ["MM-200"], "feature-xl": ["MM-200"]}
 SCENARIO = os.environ.get("DEMO_SCENARIO", "short")  # set by bench.py; must match the project in the cwd
 if SCENARIO not in SEEDS:
     raise SystemExit(f"DEMO_SCENARIO={SCENARIO!r}: expected one of {', '.join(SEEDS)}")
