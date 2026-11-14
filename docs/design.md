@@ -32,6 +32,24 @@ Decisions for `src/`. Background research: `docs/dynamic-tool-loading.md`.
 - `load_tools(names)` takes individual tool names (not namespaces, which the model over-loaded) and returns compact schemas; `call_tool(name, arguments)` validates with `jsonschema` and dispatches. Errors (unknown name, invalid arguments) go back to the model with the valid names or the schema.
 - Any registered tool name is dispatched, including native calls in dynamic mode; no special handling.
 
+## Error handling
+
+Errors the model can fix come back as the tool result; errors only the harness can handle are handled in `src/agent.py`. Every handled error is printed and logged as an `error` event with its `kind`.
+
+| Error | Handled by | What happens |
+|---|---|---|
+| Bash non-zero exit or 120 s timeout | model | exit code and stderr, or "timed out" |
+| Tool call arguments not valid JSON (often a reply cut off by `max_tokens`) | model | "not valid JSON, resend the call" (`bad_tool_json`) |
+| Arguments that fail the schema, for core and service tools alike | model | `jsonschema` message plus the schema (`validation_error`) |
+| Unknown tool or skill name | model | list of valid names (`unknown_tool`, `unknown_skill`) |
+| Tool raises (not found, bad state) | model | "Error calling X: …", with existing ids where useful (`tool_error`) |
+| LLM connection error, timeout, or HTTP 408/409/429/5xx | harness | up to 5 retries with exponential backoff, honoring `Retry-After` (`llm_retry`) |
+| Any other LLM HTTP error, or a response without `choices` | harness | run stops; the `end` event holds the error |
+| Reply cut off by `max_tokens` with no tool call | harness | ask the model to continue; stop with status `truncated` after 3 in a row (`truncated`) |
+| Turn limit | harness | stop with status `max_turns` |
+
+Not handled yet: capping large bash output (with compaction), and detecting a model that repeats the same failing call.
+
 ## Benchmark
 
 - `demo/` is the project the agent works in: a `payments` package with a planted minor-units bug, tests, and 8 skills (2 needed, 6 distractors).
