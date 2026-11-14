@@ -3,6 +3,8 @@
 Their state lives only in this process, so the model can reach it through these tools and
 not through bash. Each tool is a plain function plus a hand-written schema, registered in TOOLS.
 `ci_run_pipeline` is the one real tool: it runs pytest in the agent's working directory.
+The seed data depends on the scenario in DEMO_SCENARIO: `short` (project demo/), `long` (demo-long/) or
+`feature` (demo-feature/).
 """
 import copy
 import os
@@ -109,8 +111,106 @@ SEED = {
     },
 }
 
-STATE = copy.deepcopy(SEED)
-_next_run_id = 4813
+
+
+def _long_seed() -> dict:
+    """Three payments incidents at once: the short scenario's currency bug, a refund cap that ignores earlier
+    refunds, and VAT truncated instead of rounded. The VAT alert has no issue yet. Project: demo-long/."""
+    seed = copy.deepcopy(SEED)
+    data = os.path.join(os.path.dirname(os.path.abspath(__file__)), "demo_data")
+    log = lambda run: open(os.path.join(data, f"ci-{run}.log")).read()
+    seed["issues"]["PAY-143"] = {
+        "key": "PAY-143", "title": "Customers refunded more than they paid", "status": "open", "assignee": None,
+        "labels": ["bug", "incident"], "priority": "high",
+        "description": ("Alert ALERT-9 (refunds above captured amount) started after commit 3b7d2c0 'Simplify "
+                        "refund cap' was deployed. A payment refunded in several steps can be refunded past its "
+                        "total. CI run 4813 on main is red. Owner: whoever is on call."),
+        "comments": []}
+    seed["ci_runs"]["4813"] = {"id": "4813", "branch": "main", "status": "failed", "commit": "3b7d2c0",
+                               "summary": "7 failed, 7 passed (commit 3b7d2c0: 'Simplify refund cap')",
+                               "log": log(4813), "artifacts": {"junit.xml": "<testsuite tests=\"14\" failures=\"7\"/>"}}
+    seed["ci_runs"]["4814"] = {"id": "4814", "branch": "main", "status": "failed", "commit": "9e41f07",
+                               "summary": "10 failed, 9 passed (commit 9e41f07: 'Add VAT module')",
+                               "log": log(4814), "artifacts": {"junit.xml": "<testsuite tests=\"19\" failures=\"10\"/>"}}
+    seed["alerts"]["ALERT-9"] = {
+        "id": "ALERT-9", "service": "payments", "state": "firing", "severity": "critical",
+        "title": "Refunds above captured amount", "metric": "payments.over_refund_total",
+        "description": ("Refunds issued exceed the captured payment minus earlier refunds. Started right after "
+                        "deploy of commit 3b7d2c0."),
+        "issue": "PAY-143", "ack_note": None}
+    seed["alerts"]["ALERT-10"] = {
+        "id": "ALERT-10", "service": "payments", "state": "firing", "severity": "critical",
+        "title": "VAT ledger mismatch", "metric": "payments.vat_mismatch_total",
+        "description": ("VAT on invoices is often one cent below the finance ledger. Started right after deploy "
+                        "of commit 9e41f07 (new VAT module)."),
+        "issue": None, "ack_note": None}
+    seed["metrics"]["payments.over_refund_total"] = [0, 0, 0, 0, 3, 8, 11]
+    seed["metrics"]["payments.vat_mismatch_total"] = [0, 0, 0, 0, 0, 22, 47]
+    seed["docs"]["payments-architecture"] = ("# Payments architecture\nModules: currency (conversion, minor units), "
+                                             "invoice (totals), refunds, tax (VAT). Amounts are always integers "
+                                             "in minor units.")
+    seed["deploys"]["payments"] = {"staging": "9e41f07", "production": "9e41f07",
+                                   "history": ["a1c9e2f", "e5b4410", "3b7d2c0", "9e41f07"]}
+    return seed
+
+
+def _feature_seed() -> dict:
+    """Four detailed feature tickets for marshmallow 4.4.0 (project demo-feature/), done one after another, plus
+    distractors: a ticket someone else owns, a docs ticket, and an unrelated alert. Ticket texts live in
+    demo_data/feature/<key>.md; check.py runs the hidden tests in demo_data/feature/acceptance/."""
+    seed = copy.deepcopy(SEED)
+    data = os.path.join(os.path.dirname(os.path.abspath(__file__)), "demo_data", "feature")
+    text = lambda key: open(os.path.join(data, f"{key}.md")).read()
+    ticket = lambda key, title, **kw: {"key": key, "title": title, "status": "open", "assignee": None,
+                                       "labels": ["feature"], "priority": "medium", "description": text(key),
+                                       "comments": [], **kw}
+    seed["issues"] = {
+        "MM-198": {"key": "MM-198", "title": "Docs: quickstart still passes the removed `context` argument",
+                   "status": "open", "assignee": None, "labels": ["docs"], "priority": "low",
+                   "description": "The quickstart page shows `Schema(context=...)`, removed in 4.0.", "comments": []},
+        "MM-199": {"key": "MM-199", "title": "Flaky test_registry test on Python 3.13", "status": "closed",
+                   "assignee": "lee", "labels": ["ci", "flaky"], "priority": "low",
+                   "description": "Failed once on CI, not reproducible.", "comments": []},
+        "MM-200": {"key": "MM-200", "title": "Add fields.Color (hex colours)", "status": "in_progress",
+                   "assignee": "dana", "labels": ["feature"], "priority": "medium",
+                   "description": "Accept '#rgb' and '#rrggbb', normalise to lower case. Dana is on it.",
+                   "comments": [{"author": "dana", "body": "Half done on my branch."}]},
+        "MM-201": ticket("MM-201", "Add validate.Unique validator"),
+        "MM-202": ticket("MM-202", "Add fields.Duration for ISO 8601 durations"),
+        "MM-203": ticket("MM-203", "Add Meta.key_case option for camelCase and kebab-case keys"),
+        "MM-204": ticket("MM-204", "Add fields.Union for values with several possible shapes"),
+    }
+    seed["ci_runs"] = {
+        "5119": {"id": "5119", "branch": "main", "status": "passed", "commit": "a38b7f6",
+                 "summary": "1192 passed (tag 4.4.0)", "log": "$ python -m pytest -q\n1192 passed in 1.5s\n",
+                 "artifacts": {"junit.xml": "<testsuite tests=\"1192\" failures=\"0\"/>"}},
+        "5120": {"id": "5120", "branch": "dana/color-field", "status": "failed", "commit": "c0ffee1",
+                 "summary": "1 failed, 1195 passed", "log": "$ python -m pytest -q\nFAILED tests/test_fields.py::"
+                 "TestColor::test_short_form\n1 failed, 1195 passed in 1.6s\n",
+                 "artifacts": {"junit.xml": "<testsuite tests=\"1196\" failures=\"1\"/>"}},
+    }
+    seed["alerts"] = {k: v for k, v in seed["alerts"].items() if v["service"] != "payments" or k == "ALERT-5"}
+    seed["docs"] = {
+        "oncall-handbook": seed["docs"]["oncall-handbook"],
+        "release-process": seed["docs"]["release-process"],
+        "marshmallow-overview": "# marshmallow\nObject serialization library: schemas declare fields, `dump` "
+                                "serializes, `load` validates and deserializes. Source in src/marshmallow/.",
+    }
+    return seed
+
+
+SEEDS = {"short": SEED, "long": _long_seed(), "feature": _feature_seed()}
+# (alert, linked issue) pairs that check.py judges; None: the agent must create the issue.
+INCIDENTS = {"short": [("ALERT-7", "PAY-142")],
+             "long": [("ALERT-7", "PAY-142"), ("ALERT-9", "PAY-143"), ("ALERT-10", None)], "feature": []}
+# Feature tickets that check.py judges with hidden acceptance tests, and tickets the agent must leave alone.
+TICKETS = {"feature": ["MM-201", "MM-202", "MM-203", "MM-204"]}
+UNTOUCHED = {"feature": ["MM-200"]}
+SCENARIO = os.environ.get("DEMO_SCENARIO", "short")  # set by bench.py; must match the project in the cwd
+if SCENARIO not in SEEDS:
+    raise SystemExit(f"DEMO_SCENARIO={SCENARIO!r}: expected one of {', '.join(SEEDS)}")
+STATE = copy.deepcopy(SEEDS[SCENARIO])
+_next_run_id = max(int(r) for r in STATE["ci_runs"]) + 1
 
 
 def _get(collection: str, key: str) -> dict:
@@ -137,7 +237,8 @@ def issues_get(key: str) -> dict:
 
 
 def issues_create(title: str, description: str, labels: list[str] | None = None, priority: str = "medium") -> dict:
-    key = f"PAY-{max(int(k.split('-')[1]) for k in STATE['issues']) + 1}"
+    project = next(iter(STATE["issues"])).split("-")[0]  # one project per scenario: PAY or MM
+    key = f"{project}-{max(int(k.split('-')[1]) for k in STATE['issues']) + 1}"
     STATE["issues"][key] = {"key": key, "title": title, "status": "open", "assignee": None,
                             "labels": labels or [], "priority": priority, "description": description,
                             "comments": []}
@@ -267,7 +368,7 @@ def deploy_rollback(service: str, env: str, version: str) -> dict:
 # ---------------------------------------------------------------- schemas
 
 NAMESPACES = {
-    "issues": "Issue tracker (PAY project): find, read, comment on, assign, and change status of issues",
+    "issues": "Issue tracker: find, read, comment on, assign, and change status of issues",
     "ci": "CI system: list pipeline runs, read logs and artifacts, run the test pipeline on the working copy",
     "docs": "Team docs wiki: search, read, and edit pages",
     "metrics": "Monitoring: list, inspect, and acknowledge alerts; query metric time series",

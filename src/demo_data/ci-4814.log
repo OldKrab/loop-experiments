@@ -1,0 +1,104 @@
+..FFF.F..F.F.F.FFF.                                                      [100%]
+=================================== FAILURES ===================================
+_______________________________ test_usd_to_jpy ________________________________
+
+    def test_usd_to_jpy():
+>       assert convert(1_000, "USD", "JPY") == 1_495  # $10.00 -> ¥1495
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: assert 149500 == 1495
+E        +  where 149500 = convert(1000, 'USD', 'JPY')
+
+tests/test_currency.py:16: AssertionError
+_______________________________ test_jpy_to_usd ________________________________
+
+    def test_jpy_to_usd():
+>       assert convert(1_495, "JPY", "USD") == 1_000  # ¥1495 -> $10.00
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: assert 10 == 1000
+E        +  where 10 = convert(1495, 'JPY', 'USD')
+
+tests/test_currency.py:20: AssertionError
+_______________________________ test_usd_to_kwd ________________________________
+
+    def test_usd_to_kwd():
+>       assert convert(10_000, "USD", "KWD") == 30_700  # $100.00 -> 30.700 KWD
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: assert 3070 == 30700
+E        +  where 3070 = convert(10000, 'USD', 'KWD')
+
+tests/test_currency.py:24: AssertionError
+______________________________ test_format_amount ______________________________
+
+    def test_format_amount():
+        assert format_amount(1050, "USD") == "10.50 USD"
+>       assert format_amount(1495, "JPY") == "1495 JPY"
+E       AssertionError: assert '15 JPY' == '1495 JPY'
+E         
+E         - 1495 JPY
+E         ?  --
+E         + 15 JPY
+
+tests/test_currency.py:34: AssertionError
+_______________________ test_jpy_invoice_from_usd_prices _______________________
+
+    def test_jpy_invoice_from_usd_prices():
+        lines = [Line("Seat", 1_000, "USD", quantity=2)]
+>       assert invoice_total(lines, "JPY") == 2_990
+E       AssertionError: assert 299000 == 2990
+E        +  where 299000 = invoice_total([Line(description='Seat', unit_price_minor=1000, currency='USD', quantity=2)], 'JPY')
+
+tests/test_invoice.py:11: AssertionError
+_______________________ test_refund_capped_at_remaining ________________________
+
+    def test_refund_capped_at_remaining():
+>       assert refundable(paid_minor=1000, refunded_minor=800, requested_minor=500) == 200
+E       assert 500 == 200
+E        +  where 500 = refundable(paid_minor=1000, refunded_minor=800, requested_minor=500)
+
+tests/test_refunds.py:11: AssertionError
+_________________________ test_fully_refunded_payment __________________________
+
+    def test_fully_refunded_payment():
+>       assert refundable(paid_minor=1000, refunded_minor=1000, requested_minor=100) == 0
+E       assert 100 == 0
+E        +  where 100 = refundable(paid_minor=1000, refunded_minor=1000, requested_minor=100)
+
+tests/test_refunds.py:20: AssertionError
+_______________________ test_vat_rounds_to_nearest_cent ________________________
+
+    def test_vat_rounds_to_nearest_cent():
+>       assert vat_minor(1_999, "DE") == 380  # 379.81
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: assert 379 == 380
+E        +  where 379 = vat_minor(1999, 'DE')
+
+tests/test_tax.py:11: AssertionError
+______________________________ test_vat_half_even ______________________________
+
+    def test_vat_half_even():
+>       assert vat_minor(35, "JP") == 4  # 3.5 -> 4
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: assert 3 == 4
+E        +  where 3 = vat_minor(35, 'JP')
+
+tests/test_tax.py:15: AssertionError
+__________________________________ test_gross __________________________________
+
+    def test_gross():
+>       assert gross_minor(1_999, "DE") == 2_379
+E       AssertionError: assert 2378 == 2379
+E        +  where 2378 = gross_minor(1999, 'DE')
+
+tests/test_tax.py:20: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_currency.py::test_usd_to_jpy - AssertionError: assert 14950...
+FAILED tests/test_currency.py::test_jpy_to_usd - AssertionError: assert 10 ==...
+FAILED tests/test_currency.py::test_usd_to_kwd - AssertionError: assert 3070 ...
+FAILED tests/test_currency.py::test_format_amount - AssertionError: assert '1...
+FAILED tests/test_invoice.py::test_jpy_invoice_from_usd_prices - AssertionErr...
+FAILED tests/test_refunds.py::test_refund_capped_at_remaining - assert 500 ==...
+FAILED tests/test_refunds.py::test_fully_refunded_payment - assert 100 == 0
+FAILED tests/test_tax.py::test_vat_rounds_to_nearest_cent - AssertionError: a...
+FAILED tests/test_tax.py::test_vat_half_even - AssertionError: assert 3 == 4
+FAILED tests/test_tax.py::test_gross - AssertionError: assert 2378 == 2379
+10 failed, 9 passed in 0.11s
