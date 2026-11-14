@@ -4,7 +4,7 @@ description: Steps for releasing a service to production - verifying staging, pr
 ---
 # Release checklist
 
-Load the `deploy`, `ci`, and `metrics` service tools.
+Service tools used: `ci_list_runs`, `deploy_status`, `deploy_promote`, `deploy_rollback`, `metrics_list_alerts`, `metrics_query`, `docs_update_page`.
 
 1. Confirm the latest CI run on `main` passed (`ci_list_runs`, branch `main`). Never release a red build.
 2. Check what is deployed (`deploy_status`). Staging must run the commit you intend to release.

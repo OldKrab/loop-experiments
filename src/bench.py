@@ -41,13 +41,13 @@ def main() -> None:
     stamp = time.strftime("%Y%m%d-%H%M%S")
     rows = [run_once(mode, i, stamp, args.max_turns) for mode in args.modes.split(",") for i in range(1, args.n + 1)]
     (ROOT / "runs" / f"{stamp}-summary.json").write_text(json.dumps(rows, indent=1))
-    print(f"\n{'mode':8} {'success':>8} {'turns':>6} {'prefix_chars':>12} {'input':>9} {'cached':>9} {'uncached':>9} {'output':>8}")
+    print(f"\n{'mode':8} {'success':>8} {'turns':>6} {'prefix_chars':>12} {'input':>9} {'cached':>9} {'uncached':>9} {'output':>8} {'in/turn':>8}")
     for mode in args.modes.split(","):
         rs = [r for r in rows if r["mode"] == mode]
         mean = lambda k: round(statistics.mean(r.get(k, 0) for r in rs))
         print(f"{mode:8} {sum(r['success'] for r in rs):>4}/{len(rs):<3} {mean('turns'):>6} {mean('prefix_chars'):>12} "
               f"{mean('input_tokens'):>9} {mean('cached_input_tokens'):>9} "
-              f"{mean('input_tokens') - mean('cached_input_tokens'):>9} {mean('output_tokens'):>8}")
+              f"{mean('input_tokens') - mean('cached_input_tokens'):>9} {mean('output_tokens'):>8} {round(sum(r.get('input_tokens', 0) for r in rs) / max(1, sum(r['turns'] for r in rs))):>8}")
 
 
 if __name__ == "__main__":

@@ -21,7 +21,7 @@ The agent has `bash`, 20 service tools in 5 namespaces (`issues`, `ci`, `docs`, 
 | `tools` | `bash` + all 20 service tool schemas | `bash`, `load_skill`, `load_tools`, `call_tool` |
 | System prompt | instructions + every skill body | instructions + skill catalog (name, description) + tool catalog (namespace, purpose, tool names) |
 | Getting a skill | already in context | `load_skill(name)` returns the body as a tool result |
-| Getting a tool | native call | `load_tools(namespaces)` returns the schemas as a tool result; `call_tool(name, arguments)` validates with `jsonschema` and dispatches |
+| Getting a tool | native call | `load_tools(names)` returns the schemas as a tool result; `call_tool(name, arguments)` validates with `jsonschema` and dispatches |
 
 In both modes the system prompt and `tools` are built once and stay byte-identical for the whole session, so the backend's prefix cache keeps working: loaded content arrives as appended tool results.
 
@@ -31,4 +31,4 @@ In both modes the system prompt and `tools` are built once and stay byte-identic
 
 Task: *"An alert fired on the payments service. Investigate, fix it, and close it out per team process."* The agent has to find the alert, follow it to issue PAY-142 and failing CI run 4812, fix a minor-units bug in `demo/payments/currency.py`, get a green run from `ci_run_pipeline`, and close out according to the `hotfix-workflow` skill. `src/check.py` checks that tests pass, a new CI run is green, PAY-142 is `resolved` with a comment that states the root cause and cites the green run, and ALERT-7 is acknowledged with the issue key.
 
-Results (`deepseek-flash`, N=3 per mode): both modes 3/3 successful. Dynamic loading cut the per-turn prefix from about 5.3k to 1.3k tokens, total input by about 35% (161k to 105k), and output by about 50%. The prompt cache hit rate stayed at 91–94% in both. Details: [`docs/results-dynamic-loading.md`](docs/results-dynamic-loading.md).
+Results (`deepseek-flash`, N=3 per mode): both modes succeeded 3/3, in 14 turns on average. Dynamic mode loaded only the 2 relevant skills and 11–12 of the 20 tools, and used 41% less input (137k to 81k tokens, 9.6k to 5.9k per turn). The prompt cache hit rate was 91–92% in both modes. Details, including an earlier flawed run: [`docs/results-dynamic-loading.md`](docs/results-dynamic-loading.md).

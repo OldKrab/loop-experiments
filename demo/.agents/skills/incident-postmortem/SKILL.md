@@ -4,7 +4,7 @@ description: How to write a blameless postmortem after a production incident. Us
 ---
 # Incident postmortem
 
-Postmortems are written within 5 working days of a critical incident and stored on the docs wiki as `postmortem-<issue-key>` (load the `docs`, `issues`, and `metrics` service tools).
+Postmortems are written within 5 working days of a critical incident and stored on the docs wiki as `postmortem-<issue-key>` (service tools: `docs_get_page`, `docs_update_page`, `issues_get`, `issues_create`, `metrics_get_alert`, `metrics_query`).
 
 ## Sections
 1. **Summary**: two or three sentences: what broke, for whom, and for how long.

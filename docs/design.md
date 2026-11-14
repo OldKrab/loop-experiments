@@ -20,7 +20,8 @@ Decisions for `src/`. Background research: `docs/dynamic-tool-loading.md`.
 - Read only from `<cwd>/.agents/skills/<name>/SKILL.md` (Agent Skills format); no global skills.
 - Frontmatter parsed with `pyyaml`; skills without `name` or `description` are skipped with a warning.
 - `load_skill(name)` returns the body wrapped in `<skill_content>`; a repeat load returns "already loaded".
-- Skills don't declare tools; a skill body says which namespaces to load.
+- Skills don't declare tools; a skill body lists the tool names it uses.
+- Fixed mode inlines each skill with its description ("When to use: ..."), and both modes say to follow a skill only when its description matches the task.
 
 ## Tools
 
@@ -28,7 +29,7 @@ Decisions for `src/`. Background research: `docs/dynamic-tool-loading.md`.
 - Plain Python functions with hand-written schema dicts, in `src/demo_tools.py`. No generic or YAML-driven handlers.
 - `ci_run_pipeline` is real: it runs pytest in the working directory.
 - Catalog in the system prompt: one line per namespace with its purpose and full tool names, so the model never guesses names.
-- `load_tools(namespaces)` returns the schemas; `call_tool(name, arguments)` validates with `jsonschema` and dispatches. Errors (unknown name, invalid arguments) go back to the model with the valid names or the schema.
+- `load_tools(names)` takes individual tool names (not namespaces, which the model over-loaded) and returns compact schemas; `call_tool(name, arguments)` validates with `jsonschema` and dispatches. Errors (unknown name, invalid arguments) go back to the model with the valid names or the schema.
 - Any registered tool name is dispatched, including native calls in dynamic mode; no special handling.
 
 ## Benchmark

@@ -43,4 +43,4 @@ def catalog(skills: dict[str, Skill]) -> str:
 def render(skill: Skill) -> str:
     """Skill body as given to the model, with its directory so relative references resolve."""
     return (f'<skill_content name="{skill.name}" dir="{skill.path.parent}">\n'
-            f"{skill.body}\n</skill_content>")
+            f"When to use: {skill.description}\n\n{skill.body}\n</skill_content>")

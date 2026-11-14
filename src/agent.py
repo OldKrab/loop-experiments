@@ -31,23 +31,24 @@ Be concise. Explain what you're doing before each command."""
 FIXED_SKILLS = """
 
 ## Skills
-Team procedures. Follow every skill that applies to the task.
+Team procedures. Each skill's description says when to use it. Follow a skill only when its description \
+matches the task.
 
 {bodies}"""
 
 DYNAMIC_SKILLS = """
 
 ## Skills
-Team procedures. When a task matches a skill's description, load it with `load_skill` before starting \
-and follow it.
+Team procedures. Each skill's description says when to use it. When it matches the task, load the skill \
+with `load_skill` before anything else and follow it; a skill names the service tools it needs.
 
 {catalog}"""
 
 DYNAMIC_TOOLS = """
 
 ## Service tools
-These tools are not in your tool list. Load the namespaces the task needs with `load_tools` to get their \
-tool schemas, then run a tool with `call_tool(name, arguments)`.
+These tools are not in your tool list. Load only the tools you need with `load_tools(names)` to get their \
+schemas, then run a tool with `call_tool(name, arguments)`.
 
 {catalog}"""
 
@@ -63,10 +64,11 @@ LOAD_SKILL_TOOL = {"type": "function", "function": {
 
 LOAD_TOOLS_TOOL = {"type": "function", "function": {
     "name": "load_tools",
-    "description": "Return the JSON schemas of every tool in the given namespaces, to use with call_tool.",
+    "description": "Return the JSON schemas of the given service tools, to use with call_tool.",
     "parameters": {"type": "object", "properties": {
-        "namespaces": {"type": "array", "items": {"type": "string", "enum": sorted(demo_tools.NAMESPACES)},
-                       "description": "Namespaces from the 'Service tools' list."}}, "required": ["namespaces"]}}}
+        "names": {"type": "array", "items": {"type": "string"},
+                  "description": "Full tool names from the 'Service tools' list, e.g. ['issues_get']."}},
+        "required": ["names"]}}}
 
 CALL_TOOL_TOOL = {"type": "function", "function": {
     "name": "call_tool", "description": "Run a service tool by its full name, e.g. 'issues_get'.",
@@ -138,15 +140,14 @@ class Agent:
         self.loaded_skills.add(name)
         return skills_mod.render(skill)
 
-    def load_tools(self, namespaces: list[str]) -> str:
-        unknown = [ns for ns in namespaces if ns not in demo_tools.NAMESPACES]
+    def load_tools(self, names: list[str]) -> str:
+        unknown = [n for n in names if n not in demo_tools.TOOLS]
         if unknown:
-            return f"Error: unknown namespaces {unknown}. Available: {', '.join(demo_tools.NAMESPACES)}"
+            return f"Error: unknown tools {unknown}. Available: {', '.join(demo_tools.TOOLS)}"
         self.log.count("load_tools")
-        self.log.event("load_tools", namespaces=namespaces)
-        schemas = [schema["function"] for name, (schema, _) in demo_tools.TOOLS.items()
-                   if name.split("_")[0] in namespaces]
-        return json.dumps(schemas, indent=1) + "\n\nRun these with call_tool(name, arguments)."
+        self.log.event("load_tools", names=names)
+        schemas = [demo_tools.TOOLS[n][0]["function"] for n in dict.fromkeys(names)]
+        return json.dumps(schemas, ensure_ascii=False) + "\n\nRun these with call_tool(name, arguments)."
 
     def run_service_tool(self, name: str, arguments) -> str:
         if name not in demo_tools.TOOLS:

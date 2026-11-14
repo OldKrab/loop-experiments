@@ -4,7 +4,7 @@ description: Team process for fixing a production bug or a firing alert end to e
 ---
 # Hotfix workflow
 
-Load the service tools you need first: `issues`, `ci`, and `metrics`.
+Service tools used: `metrics_get_alert`, `metrics_ack_alert`, `issues_get`, `issues_create`, `issues_assign`, `issues_transition`, `issues_comment`, `ci_list_runs`, `ci_get_log`, `ci_run_pipeline`.
 
 ## 1. Take ownership
 - Find the issue linked to the alert (`metrics_get_alert` shows it). If none exists, create one with `issues_create`, labels `bug` and `incident`.
