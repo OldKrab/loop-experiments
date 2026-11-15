@@ -3,7 +3,7 @@
 Their state lives only in this process, so the model can reach it through these tools and
 not through bash. Each tool is a plain function plus a hand-written schema, registered in TOOLS.
 `ci_run_pipeline` is the one real tool: it runs pytest in the agent's working directory.
-The seed data depends on the scenario in DEMO_SCENARIO: `short` (project demo/), `long` (demo-long/) or
+The seed data depends on the scenario in DEMO_SCENARIO: `short` (project demo/),
 `feature` or `feature-xl` (demo-feature/, 4 or 10 tickets).
 """
 import copy
@@ -113,47 +113,6 @@ SEED = {
 
 
 
-def _long_seed() -> dict:
-    """Three payments incidents at once: the short scenario's currency bug, a refund cap that ignores earlier
-    refunds, and VAT truncated instead of rounded. The VAT alert has no issue yet. Project: demo-long/."""
-    seed = copy.deepcopy(SEED)
-    data = os.path.join(os.path.dirname(os.path.abspath(__file__)), "demo_data")
-    log = lambda run: open(os.path.join(data, f"ci-{run}.log")).read()
-    seed["issues"]["PAY-143"] = {
-        "key": "PAY-143", "title": "Customers refunded more than they paid", "status": "open", "assignee": None,
-        "labels": ["bug", "incident"], "priority": "high",
-        "description": ("Alert ALERT-9 (refunds above captured amount) started after commit 3b7d2c0 'Simplify "
-                        "refund cap' was deployed. A payment refunded in several steps can be refunded past its "
-                        "total. CI run 4813 on main is red. Owner: whoever is on call."),
-        "comments": []}
-    seed["ci_runs"]["4813"] = {"id": "4813", "branch": "main", "status": "failed", "commit": "3b7d2c0",
-                               "summary": "7 failed, 7 passed (commit 3b7d2c0: 'Simplify refund cap')",
-                               "log": log(4813), "artifacts": {"junit.xml": "<testsuite tests=\"14\" failures=\"7\"/>"}}
-    seed["ci_runs"]["4814"] = {"id": "4814", "branch": "main", "status": "failed", "commit": "9e41f07",
-                               "summary": "10 failed, 9 passed (commit 9e41f07: 'Add VAT module')",
-                               "log": log(4814), "artifacts": {"junit.xml": "<testsuite tests=\"19\" failures=\"10\"/>"}}
-    seed["alerts"]["ALERT-9"] = {
-        "id": "ALERT-9", "service": "payments", "state": "firing", "severity": "critical",
-        "title": "Refunds above captured amount", "metric": "payments.over_refund_total",
-        "description": ("Refunds issued exceed the captured payment minus earlier refunds. Started right after "
-                        "deploy of commit 3b7d2c0."),
-        "issue": "PAY-143", "ack_note": None}
-    seed["alerts"]["ALERT-10"] = {
-        "id": "ALERT-10", "service": "payments", "state": "firing", "severity": "critical",
-        "title": "VAT ledger mismatch", "metric": "payments.vat_mismatch_total",
-        "description": ("VAT on invoices is often one cent below the finance ledger. Started right after deploy "
-                        "of commit 9e41f07 (new VAT module)."),
-        "issue": None, "ack_note": None}
-    seed["metrics"]["payments.over_refund_total"] = [0, 0, 0, 0, 3, 8, 11]
-    seed["metrics"]["payments.vat_mismatch_total"] = [0, 0, 0, 0, 0, 22, 47]
-    seed["docs"]["payments-architecture"] = ("# Payments architecture\nModules: currency (conversion, minor units), "
-                                             "invoice (totals), refunds, tax (VAT). Amounts are always integers "
-                                             "in minor units.")
-    seed["deploys"]["payments"] = {"staging": "9e41f07", "production": "9e41f07",
-                                   "history": ["a1c9e2f", "e5b4410", "3b7d2c0", "9e41f07"]}
-    return seed
-
-
 def _feature_seed(xl: bool = False) -> dict:
     """Four (ten with `xl`) detailed feature tickets for marshmallow 4.4.0 (project demo-feature/), done one after
     another, plus
@@ -209,11 +168,9 @@ def _feature_seed(xl: bool = False) -> dict:
     return seed
 
 
-SEEDS = {"short": SEED, "long": _long_seed(), "feature": _feature_seed(), "feature-xl": _feature_seed(xl=True)}
+SEEDS = {"short": SEED, "feature": _feature_seed(), "feature-xl": _feature_seed(xl=True)}
 # (alert, linked issue) pairs that check.py judges; None: the agent must create the issue.
-INCIDENTS = {"short": [("ALERT-7", "PAY-142")],
-             "long": [("ALERT-7", "PAY-142"), ("ALERT-9", "PAY-143"), ("ALERT-10", None)],
-             "feature": [], "feature-xl": []}
+INCIDENTS = {"short": [("ALERT-7", "PAY-142")], "feature": [], "feature-xl": []}
 # Feature tickets that check.py judges with hidden acceptance tests, and tickets the agent must leave alone.
 TICKETS = {"feature": [f"MM-{n}" for n in range(201, 205)], "feature-xl": [f"MM-{n}" for n in range(201, 211)]}
 UNTOUCHED = {"feature": ["MM-200"], "feature-xl": ["MM-200"]}

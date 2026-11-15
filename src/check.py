@@ -36,9 +36,6 @@ def check(log_path: Path, workdir: Path) -> dict:
     for alert_id, issue_key in demo_tools.INCIDENTS[scenario]:
         alert = state["alerts"][alert_id]
         note = alert["ack_note"] or ""
-        if issue_key is None:  # the agent had to create the issue: take the new key its ack note names
-            issue_key = next((k for k in re.findall(r"\bPAY-\d+\b", note)
-                              if k in state["issues"] and k not in seed["issues"]), None)
         issue = state["issues"].get(issue_key) if issue_key else None
         comments = [c["body"] for c in issue["comments"] if c["author"] == "agent"] if issue else []
         checks |= {

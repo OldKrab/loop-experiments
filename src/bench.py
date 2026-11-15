@@ -11,9 +11,6 @@ ROOT = Path(__file__).resolve().parent.parent
 TASKS = {
     "short": ("demo", "short",
               "An alert fired on the payments service. Investigate, fix it, and close it out per team process."),
-    "long": ("demo-long", "long",
-             "Several alerts are firing on the payments service. Investigate each one, fix it, and close it out "
-             "per team process."),
     "feature": ("demo-feature", "feature",
                 "Work through the open feature tickets in the issue tracker, oldest first, per team process."),
     "feature-xl": ("demo-feature", "feature-xl",

@@ -42,54 +42,8 @@ Run on 2026-11-14 with `uv run python src/bench.py --modes dynamic --compact-at 
   - *Extra turns:* 4 more per run on average, mostly to load skills and tool schemas again after a compaction (`load_skill` 2 → 3.3 per run, `load_tools` 1.3 → 3).
   - *Cache misses:* each compaction re-prefills the new checkpoint and tail (about 2k tokens), plus the uncached part of its summary call.
 - **What it did buy:** the peak context fell from 9.6k to 5.8k tokens, and input per agent turn fell 16%.
-- **Why there is no saving:** compaction pays off only when many turns follow it, each re-sending about 3k fewer tokens. Here a run has 13 turns in total, and the first compaction happens around turn 7, so too few turns are left to recover the summary call and the re-loading turns. The long task below shows that it does.
+- **Why there is no saving:** compaction pays off only when many turns follow it, each re-sending about 3k fewer tokens. Here a run has 13 turns in total, and the first compaction happens around turn 7, so too few turns are left to recover the summary call and the re-loading turns. The feature tasks below test longer sessions.
 - **Caveat:** N=3 with one model and one task, and the "off" runs vary from 74k to 103k input on their own, so treat the numbers as indicative.
-
-## Long task
-
-Run on 2026-11-14 with `uv run python src/bench.py --task long --modes dynamic --compact-at 7000,12000 -n 3 -j 6`. The "off" rows are the dynamic runs from the fixed-vs-dynamic measurement on the same task, run a few minutes earlier (`results-dynamic-loading.md`).
-
-- **Task:** three critical payments alerts at once (`demo-long/`): the currency bug, a refund cap that ignores earlier refunds, and VAT truncated instead of rounded. The VAT alert has no issue, so the agent must create one. Success requires all three incidents closed out per the hotfix workflow.
-- **Thresholds:** without compaction the context peaks at 15–19k tokens (mean 16.7k). 7,000 and 12,000 are about 40% and 70% of that.
-- **Shape:** the agent fixes all three bugs in one pass and then closes out each issue, so a run takes 16–26 turns rather than three times the short task's 13.
-
-### Summary (means of 3 runs)
-
-| compact-at | success | turns | input | cached input | uncached input | output | input / turn | compactions | peak context |
-|---|---|---|---|---|---|---|---|---|---|
-| off | 3/3 | 19 | 202,887 | 191,104 | 11,783 | 6,845 | 10,494 | 0 | 16.7k |
-| 12000 | 3/3 | 19 | 155,167 | 138,624 | 16,543 | 6,332 | 8,167 | 1 | 11.2k |
-| 7000 | 3/3 | 25 | 156,138 | 128,555 | 27,583 | 8,600 | 6,246 | 4 | 7.0k |
-
-### Per run
-
-| compact-at | run | success | turns | input | cached input | output | peak context | compactions | seconds | load_skill / load_tools |
-|---|---|---|---|---|---|---|---|---|---|---|
-| off | 1 | yes | 16 | 158,999 | 147,968 | 5,984 | 15,310 | 0 | 40 | 2 / 1 |
-| off | 2 | yes | 24 | 269,172 | 256,640 | 8,606 | 18,819 | 0 | 84 | 3 / 3 |
-| off | 3 | yes | 18 | 180,491 | 168,704 | 5,946 | 15,838 | 0 | 40 | 2 / 1 |
-| 12000 | 1 | yes | 18 | 147,702 | 130,048 | 5,888 | 10,914 | 1 | 41 | 2 / 3 |
-| 12000 | 2 | yes | 22 | 194,856 | 177,024 | 6,334 | 11,919 | 1 | 46 | 3 / 5 |
-| 12000 | 3 | yes | 17 | 122,943 | 108,800 | 6,774 | 10,839 | 1 | 42 | 2 / 1 |
-| 7000 | 1 | yes | 24 | 149,640 | 123,392 | 7,994 | 6,978 | 4 | 58 | 2 / 5 |
-| 7000 | 2 | yes | 25 | 157,742 | 130,304 | 8,793 | 6,958 | 4 | 60 | 4 / 6 |
-| 7000 | 3 | yes | 26 | 161,031 | 131,968 | 9,012 | 6,993 | 4 | 61 | 4 / 6 |
-
-### Observations
-
-- **Success is unaffected:** 9/9 runs succeeded, including the incident whose issue the agent had to create.
-- **Total input fell about 24% at both thresholds** (203k → 155–156k), so on this task compaction pays for its summary calls.
-- **12,000 (one compaction) is the better setting:**
-  - It takes as many turns as off, and output is 7% lower.
-  - Uncached input rises 40% (11.8k → 16.5k): one planned miss after the compaction, plus the uncached part of a single summary call.
-  - The summary call is about 12.5k input (94% cached) and about 700 output tokens.
-- **7,000 (four compactions) saves no more input and costs more elsewhere:**
-  - 6 more turns per run, mostly re-loading skills and tool schemas (`load_tools` 1.7 → 5.7 per run).
-  - 26% more output (summaries are about 3k output tokens per run).
-  - 2.3× the uncached input.
-  - Runs take about 50% longer in wall-clock time.
-- **Re-loading after compaction works, with one wrinkle:** in one 12000 run, the agent called `metrics_ack_alert` after compaction without loading its schema again. It got the argument name wrong 3 times and recovered each time from the schema in the validation error.
-- **Caveat:** N=3, and the off runs vary from 159k to 269k input on their own (one off run took 24 turns). The 24% saving is the same order as that spread, so treat it as indicative. The direction matches the research: compact rarely, well below the peak but not repeatedly.
 
 ## Feature task
 
@@ -170,6 +124,28 @@ The two calibration runs without compaction (104 and 128 turns, 13.19¢ and 17.2
 - **The compaction cost model holds.** Compacting from C to about 20k saves roughly (C − 20k) cached tokens on each of the T turns that follow. It costs one summary call, the re-reads (uncached input and extra turns), and the risk of losing the process. At a 50× cache discount, a one-off saving needs C ≈ 100k and T ≈ 30+ to show.
 - **Caveat:** N=3. A threshold that fires once per run needs more runs to separate a 7% saving from noise.
 - **Working conclusion (no further runs):** compaction is taken to pay off for sessions that grow past about 150k tokens, with the threshold set near 100k or above. Below that, leaving it off is cheaper and safer.
+
+## Re-run with skills re-loaded after compaction
+
+Run on 2026-11-15, re-running only the configs with compaction on. Runs without compaction are unaffected by the change, so the "off" rows are the ones above.
+
+- **The change:** the summarizer now decides which loaded skills are still in progress and ends the summary with `Load before continuing: <names>`.
+- **What the harness does with it:** it puts those skill bodies into the checkpoint message, after the summary.
+- **Before:** the summary only listed the loaded skills, and the model was told to load again what it needed.
+
+| task | compact-at | success before → after | turns before → after | cost before → after | off |
+|---|---|---|---|---|---|
+| short | 6000 | 3/3 → 3/3 | 17 → 18 | 1.03¢ → 1.15¢ | 0.62¢ |
+| feature | 38000 | 3/3 → 3/3 | 85 → 71 | 8.19¢ → 7.10¢ | 6.46¢, 69 turns |
+| feature | 22000 | 2/3 → 3/3 | 115 → 102 | 9.92¢ → 9.22¢ | |
+| feature-xl | 100000 | 3/3 → 3/3 | 120 → 112 | 14.04¢ → 13.80¢ | 15.14¢, 132 turns |
+| feature-xl | 60000 | 1/3 → 2/3 | 157 → 150 | 16.84¢ → 17.36¢ | |
+
+- **No process drift after compaction.** 40 of the 41 compactions wrote the reload line, and each of those named `feature-workflow` or `hotfix-workflow`. The one summary without the line came late in a run, after the last ticket. No run lost the closing-comment format, which caused two of the three earlier failures.
+  - Re-loading costs 500–1,600 tokens per compaction, and the post-compaction context is not cached anyway.
+- **Fewer turns.** At 38k the run is now about as long as without compaction (71 vs 69 turns), down from 85. Part of the earlier re-reading came from the agent working without its skills.
+- **The one failure is not caused by compaction.** In feature-xl at 60k, run 2 wrote "MM-202 resolved" at turn 29 without calling `issues_transition`, before its first compaction at turn 54. It repeated the same skip through MM-209, so 8 tickets were left `in_progress` with correct code and comments. Later summaries carried the false "resolved" forward: the summarizer can only keep what the history says, not check it.
+- **Cost.** Compaction at 100k is still slightly cheaper than off (−9%), and lower thresholds still cost more. The conclusion below is unchanged: compaction is for long sessions, with a high threshold.
 
 ## Prompt cache (`TASK.md` question 1)
 

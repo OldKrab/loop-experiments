@@ -1,6 +1,6 @@
 # A real project for the long task
 
-The current long task (`demo-long/`) peaks at about 17k tokens of context in about 19 turns (`results-compaction.md`). That is too small for context compaction to pay off. The goal is 50+ turns and a 40–80k+ token peak.
+The first longer task (three payments incidents at once, since removed) peaked at about 17k tokens of context in about 19 turns (`results-compaction.md`). That is too small for context compaction to pay off. The goal is 50+ turns and a 40–80k+ token peak.
 
 **Plan.** We will vendor a pinned, stripped snapshot of a real Python library (no docs, CI files or git history) and write 3–4 detailed feature tickets with exact APIs. Each ticket gets hidden acceptance tests. The agent works through the tickets one after another in a single session, with one CI run (`ci_run_pipeline`, i.e. pytest) per ticket. Runs are judged by the hidden tests plus a manual review of the diff. This doc picks the project. Benchmark task formats are out of scope.
 

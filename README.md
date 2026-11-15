@@ -1,34 +1,55 @@
 # Agent harness
 
-A minimal coding agent (`baseline/agent.py`) extended with dynamic loading of skills and tools.
-
-## Run
+The solution is in `src/`. The original harness is untouched in `baseline/`. The benchmark projects are `demo/` (short task) and `demo-feature/` (feature tasks, a copy of marshmallow 4.4.0, MIT). The task itself is in `TASK.md`.
 
 ```sh
 uv sync
-cd demo && uv run python ../src/agent.py --loading dynamic "your task"   # or --loading fixed
-uv run python src/bench.py -n 3          # benchmark both modes on fresh copies of demo/
+cd demo && uv run python ../src/agent.py --loading dynamic --compact-at 100000 "your task"
+uv run python src/bench.py --task feature --modes fixed,dynamic --compact-at 0,38000 -n 3
 ```
 
-Config: `LLM_BASE_URL` (default `http://127.0.0.1:8787/v1`), `LLM_API_KEY`, `LLM_MODEL` (default `deepseek-flash`).
+Set `LLM_BASE_URL`, `LLM_API_KEY` and `LLM_MODEL` for any OpenAI-compatible endpoint. All runs below used `deepseek-flash`.
 
-## Loading modes
+## Solution
 
-The agent has `bash`, 20 service tools in 5 namespaces (`issues`, `ci`, `docs`, `metrics`, `deploy`; mock services whose state is only reachable through the tools), and the skills found in `<cwd>/.agents/skills/`.
+**Dynamic loading of skills.** Skills are read from `<cwd>/.agents/skills/` when the agent starts. The system prompt lists only their names and descriptions, and the agent loads a skill's full text with the `load_skill` tool.
 
-| | `fixed` | `dynamic` |
+**Dynamic loading of tools.** The baseline has only `bash`, so I added 20 mock tools for testing in `src/demo_tools.py`: an issue tracker, CI, a docs wiki, monitoring and deploys. Their data lives inside the harness, so `bash` can't replace them. The system prompt lists only the tool names, grouped with a short description per group. The agent gets the schemas with `load_tools` and runs a tool with `call_tool`.
+
+**Compaction.** Before each model call the harness estimates the context size: the size the model reported on the last call, plus the characters added since divided by 4. Over the threshold (`--compact-at`), the model writes a summary that keeps the main goal and the current work. It ends with the skills that are still in progress. The history is then replaced by the system prompt, the task, the summary with those skills loaded again, and the last few messages.
+
+Also fixed in the baseline: the assistant message is stored once and as received (the baseline split parallel tool calls and dropped `reasoning_content`, which DeepSeek requires back), malformed tool-call JSON no longer crashes the loop, and config comes from env vars.
+
+## Answers
+
+**1. How to do compaction and skill loading without breaking the prompt cache?**
+The system prompt and the tool list never change until a compaction. Loaded skills and tool schemas arrive as tool results appended to the end of the history, so the cached prefix stays the same. Compaction happens only at the threshold, so it breaks the cache once, not on every step, and the summary request is the current history plus one message at the end, so it is cached too.
+
+**2. Which errors go back to the model, and which does the harness handle?**
+Every tool error goes back to the model, so it can decide how to fix it: a failed command, invalid arguments (with the tool's schema), an unknown tool or skill (with the valid names), a tool's own errors. The harness handles only problems of its own that the model can't fix: network and HTTP errors when calling the model (retried), a reply cut off at `max_tokens`, and the turn limit.
+
+## Comparison
+
+| task | what the agent does |
+|---|---|
+| short | fixes one bug from an alert and closes the issue |
+| feature | implements 4 feature tickets in marshmallow, each checked by hidden tests |
+| feature-xl | the same with 10 tickets |
+
+**Dynamic vs fixed loading.** In fixed mode all skills and tool schemas are in the prompt from the start. Mean of 3 runs, all successful:
+
+| task | fixed | dynamic |
 |---|---|---|
-| `tools` | `bash` + all 20 service tool schemas | `bash`, `load_skill`, `load_tools`, `call_tool` |
-| System prompt | instructions + every skill body | instructions + skill catalog (name, description) + tool catalog (namespace, purpose, tool names) |
-| Getting a skill | already in context | `load_skill(name)` returns the body as a tool result |
-| Getting a tool | native call | `load_tools(names)` returns the schemas as a tool result; `call_tool(name, arguments)` validates with `jsonschema` and dispatches |
+| short | 137k tokens, 0.85¢ | 81k tokens, 0.62¢ |
+| feature | 2.87M tokens, 7.34¢ | 2.46M tokens, 6.46¢ |
 
-In both modes the system prompt and `tools` are built once and stay byte-identical for the whole session, so the backend's prefix cache keeps working: loaded content arrives as appended tool results.
+**Compaction**, with dynamic loading. Mean of 3 runs:
 
-`baseline/agent.py` itself is not benchmarked. It can't run against the test backend, which requires `reasoning_content` to be passed back, and it has neither the service tools nor the skills, so it couldn't do the task. `--loading fixed` is the "everything up front" version of it with the same capabilities as `dynamic`.
+| task | off | compaction |
+|---|---|---|
+| feature (peak ~65k) | 6.46¢, 3/3 | at 38k: 7.10¢, 3/3; at 22k: 9.22¢, 3/3 |
+| feature-xl (peak ~120k) | 15.14¢, 3/3 | at 100k: 13.80¢, 3/3; at 60k: 17.36¢, 2/3 |
 
-## Benchmark
+On short sessions compaction costs more: the tokens it removes were cached and nearly free, while the agent spends extra turns reading files again. It saved money only on the longest task, and only a little. I assume it pays off on sessions over about 150k tokens, but I didn't measure that. In the first version, the summary only listed the skills, and the agent often didn't load the workflow skill again, so it broke the team process. Now the harness loads the skills the summary names. The one failure left (at 60k) happened before the first compaction.
 
-Task: *"An alert fired on the payments service. Investigate, fix it, and close it out per team process."* The agent has to find the alert, follow it to issue PAY-142 and failing CI run 4812, fix a minor-units bug in `demo/payments/currency.py`, get a green run from `ci_run_pipeline`, and close out according to the `hotfix-workflow` skill. `src/check.py` checks that tests pass, a new CI run is green, PAY-142 is `resolved` with a comment that states the root cause and cites the green run, and ALERT-7 is acknowledged with the issue key.
-
-Results (`deepseek-flash`, N=3 per mode): both modes succeeded 3/3, in 14 turns on average. Dynamic mode loaded only the 2 relevant skills and 11–12 of the 20 tools, and used 41% less input (137k to 81k tokens, 9.6k to 5.9k per turn). The prompt cache hit rate was 91–92% in both modes. Details, including an earlier flawed run: [`docs/results-dynamic-loading.md`](docs/results-dynamic-loading.md).
+Details of all runs are in `docs/`.

@@ -1,5 +1,5 @@
 """Coding agent loop: bash + team service tools + skills, loaded up front (fixed) or on demand (dynamic)."""
-import argparse, itertools, json, os, subprocess, sys, tempfile, time
+import argparse, itertools, json, os, re, subprocess, sys, tempfile, time
 from pathlib import Path
 
 import jsonschema
@@ -23,7 +23,8 @@ CHARS_PER_TOKEN = 4  # estimate for messages not yet counted by the server's usa
 COMPACT_TAIL_SHARE = 0.3  # newest messages kept verbatim after compaction, as a share of --compact-at
 MAX_COMPACTION_FAILURES = 2  # failed compactions before the run stops trying
 
-COMPACT_PROMPT = """\
+RELOAD_LINE = "Load before continuing:"  # last line of a summary; the harness re-loads the skills it names
+COMPACT_PROMPT = f"""\
 Stop working on the task for a moment: the conversation is getting long, and everything above this message \
 except the system prompt and the task will be replaced by your summary. Write that summary now, so you can \
 continue the task from it alone.
@@ -31,9 +32,14 @@ continue the task from it alone.
 Write it in plain prose, as short as possible while keeping what you will need. It must keep:
 - the main objective of the task;
 - what you are doing right now and what comes next;
-- which skills you loaded and how far along each one you are, so you can load them again;
+- which skills you loaded and where you are in each;
 - exact identifiers you will need later: file paths, issue, alert and CI run ids, commands, error messages;
 - approaches that failed, and why.
+
+Skill bodies are removed with the history, and your summary of a skill is no substitute for its exact steps, \
+formats and rules. Decide which loaded skills are still in progress: the remaining work must still follow them. \
+End the summary with one line naming them; their full text will be loaded again for you after the summary:
+{RELOAD_LINE} <comma-separated skill names, or none>
 
 If an earlier summary is present above, your summary replaces it: carry forward whatever still matters. \
 Do not call any tools. Reply with the summary only, under 400 words."""
@@ -43,8 +49,9 @@ Earlier messages were removed to save context. This is your summary of the work 
 
 {summary}
 </checkpoint>
-Continue the task from here. Skill bodies and tool schemas loaded earlier are gone: load again with \
-`load_skill` / `load_tools` whatever you still need."""
+{skills}Continue the task from here. Tool schemas, and skills not loaded again above, are gone with the earlier \
+messages: load again with `load_tools` / `load_skill` whatever else you need."""
+RELOADED_SKILLS = "The skills your summary marks as still in progress, loaded again:\n\n{bodies}\n\n"
 
 SYSTEM_PROMPT = """\
 You are a coding agent. Your job is to help the user with programming tasks in the current directory.
@@ -339,6 +346,14 @@ class Agent:
             self.log.event("compaction_retry", reason=reason, **tokens)
         return None, reason, tokens
 
+    def skills_to_reload(self, summary: str) -> list[str] | None:
+        """Known skill names from the summary's last "Load before continuing:" line; None if it has none."""
+        lines = [ln for ln in summary.splitlines() if RELOAD_LINE.lower() in ln.lower()]
+        if not lines:
+            return None
+        names = re.split(r"[,\s`*]+", lines[-1].lower().split(RELOAD_LINE.lower(), 1)[1])
+        return [n for n in dict.fromkeys(names) if n in self.skills]
+
     def compact(self, messages: list[dict], before: int) -> list[dict] | None:
         """Replace everything after the task with a summary checkpoint plus a verbatim tail; None on failure."""
         started = time.time()
@@ -353,15 +368,22 @@ class Agent:
             if messages[i]["role"] == "assistant":
                 tail_start = i
         tail = messages[tail_start:]
-        new = None
+        new, reload = None, None
         if summary:
-            new = messages[:2] + [{"role": "user", "content": CHECKPOINT.format(summary=summary)}] + tail
+            # The summarizer decides which skills are still in progress; the harness re-loads exactly those, since
+            # agents told to re-load them often did not, and then drifted from the skill's formats and steps.
+            reload = self.skills_to_reload(summary)
+            bodies = "\n\n".join(skills_mod.render(self.skills[n]) for n in reload or [])
+            skills = RELOADED_SKILLS.format(bodies=bodies) if bodies else ""
+            checkpoint = CHECKPOINT.format(summary=summary, skills=skills)
+            new = messages[:2] + [{"role": "user", "content": checkpoint}] + tail
             after = estimate_tokens(self.tools) + sum(estimate_tokens(m) for m in new)
             if after >= self.compact_at:
                 reason, new = f"compacted history is still ~{after} tokens, not under {self.compact_at}", None
         info = dict(before=before, threshold=self.compact_at, messages_before=len(messages),
                     tail_messages=len(tail), tail_tokens=sum(estimate_tokens(m) for m in tail),
-                    summary_chars=len(summary or ""), seconds=round(time.time() - started, 1),
+                    summary_chars=len(summary or ""), reload_skills=reload,
+                    reload_tokens=estimate_tokens(bodies) if summary else 0, seconds=round(time.time() - started, 1),
                     summary_usage=tokens)
         if new is None:
             self.compaction_failures += 1
@@ -373,8 +395,9 @@ class Agent:
         self.log.event("compaction", after=after, messages_after=len(new), summary=summary, **info)
         print(f"🗜️  ~{before} → ~{after} tokens; kept {len(tail)} tail messages; summary {len(summary)} chars")
         print(f"   {summary[:500]}{'...' if len(summary) > 500 else ''}")
-        # Loaded skills are gone with the history; the summary names them so the model can load them again.
-        self.loaded_skills.clear()
+        print(f"   re-loaded skills: {', '.join(reload) if reload else 'none' if reload == [] else 'line missing'}")
+        # Other loaded skills are gone with the history; the re-loaded ones live in the checkpoint now.
+        self.loaded_skills = set(reload or [])
         self.usage_tokens, self.usage_upto = None, 0
         return new
 
