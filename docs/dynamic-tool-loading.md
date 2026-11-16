@@ -1,6 +1,6 @@
 # Dynamic tool and skill loading in coding agents
 
-Research input for adding dynamic skill/tool loading to `baseline/agent.py` (OpenAI-compatible `/chat/completions`, any model, possibly a self-hosted vLLM/SGLang/llama.cpp-style server). Central question from `TASK.md`: how to load skills/tools **without invalidating the prompt cache (KV-cache of the prefix) on every step**. Context compaction is out of scope except where it touches tool loading.
+Research input for adding dynamic skill/tool loading to `baseline/agent.py` (OpenAI-compatible `/chat/completions`, any model, possibly a self-hosted vLLM/SGLang/llama.cpp-style server). Central question from the task: how to load skills/tools **without invalidating the prompt cache (KV-cache of the prefix) on every step**. Context compaction is out of scope except where it touches tool loading.
 
 Researched 2026-11-14. Code was read (not run) from shallow clones; web docs were fetched the same day. Citations: `repo:path:Lstart-Lend` at the commit below, or a URL.
 
@@ -417,7 +417,7 @@ Constraints: `/chat/completions` only; any model, including self-hosted; no reli
 - *Keyword auto-injection* (OpenHands) saves the model a decision and is cache-safe when appended to the user message, but it has false positives and only checks user text. Treat it as optional, behind dedupe.
 - *Masking* (Manus) is the most cache-friendly and the most accurate, but it needs control over decoding. A generic OpenAI-compatible client doesn't have that, except named or `required` `tool_choice` on vLLM.
 
-**What to measure (for TASK.md's before/after):**
+**What to measure (for the task's before/after):**
 - prompt tokens per step;
 - cached-token ratio per step;
 - tokens in `tools` + `system` at session start;

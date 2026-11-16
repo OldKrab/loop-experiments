@@ -1,6 +1,6 @@
 # Agent harness
 
-The solution is in `src/`. The original harness is untouched in `baseline/`. The benchmark projects are `demo/` (short task) and `demo-feature/` (feature tasks, a copy of marshmallow 4.4.0, MIT). The task itself is in `TASK.md`.
+The solution is in `src/`. The original harness is untouched in `baseline/`. The benchmark projects are `demo/` (short task) and `demo-feature/` (feature tasks, a copy of marshmallow 4.4.0, MIT). The agent sessions that built it are in `sessions/`: research, dynamic loading, and compaction.
 
 ```sh
 uv sync

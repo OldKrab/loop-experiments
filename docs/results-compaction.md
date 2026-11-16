@@ -147,7 +147,7 @@ Run on 2026-11-15, re-running only the configs with compaction on. Runs without 
 - **The one failure is not caused by compaction.** In feature-xl at 60k, run 2 wrote "MM-202 resolved" at turn 29 without calling `issues_transition`, before its first compaction at turn 54. It repeated the same skip through MM-209, so 8 tickets were left `in_progress` with correct code and comments. Later summaries carried the false "resolved" forward: the summarizer can only keep what the history says, not check it.
 - **Cost.** Compaction at 100k is still slightly cheaper than off (−9%), and lower thresholds still cost more. The conclusion below is unchanged: compaction is for long sessions, with a high threshold.
 
-## Prompt cache (`TASK.md` question 1)
+## Prompt cache (question 1 of the task)
 
 Prefix caches (vLLM, SGLang, llama.cpp, and hosted APIs) reuse a request's KV cache only up to the first token that differs from an earlier request. The harness therefore treats the request as `[tools][system][task][checkpoint][append-only turns]` and changes it only from the right:
 

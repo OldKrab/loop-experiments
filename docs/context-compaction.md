@@ -2,7 +2,7 @@
 
 This is research input for adding "smart context compaction on window overflow" to `baseline/agent.py`. The harness calls OpenAI-compatible `/chat/completions` with one `bash` tool, any model, possibly on a self-hosted vLLM, SGLang or llama.cpp-style server. Today its message list grows without bound and it does no token accounting.
 
-The central question from `TASK.md` for this area is **how to compact without invalidating the prompt cache (the KV cache of the prefix) on every step.** Dynamic tool and skill loading is covered in `dynamic-tool-loading.md` and left out here.
+The central question from the task for this area is **how to compact without invalidating the prompt cache (the KV cache of the prefix) on every step.** Dynamic tool and skill loading is covered in `dynamic-tool-loading.md` and left out here.
 
 Researched 2026-11-14. Code was read (not run) from shallow clones, and web pages were fetched the same day. Citations take the form `repo:path:Lstart-Lend` at the commit below, or a URL. "UNVERIFIED" marks claims I could not trace to a primary source. "Inference" marks my own reasoning, not a source's claim.
 
@@ -499,7 +499,7 @@ That is roughly 25–40× less prefill.
 - Never rewrite stored messages, except during an explicit compaction.
 - Store the assistant message exactly as returned. Inference: today the baseline re-emits one assistant message per tool call, duplicating `content`. That is valid, but it makes the history differ from what the model produced. One assistant message with all its `tool_calls`, followed by their results, is the canonical form.
 
-**Logging (needed to diagnose compaction failures and measure the `TASK.md` before/after).**
+**Logging (needed to diagnose compaction failures and measure the before/after the task asks for).**
 - Per LLM call: `prompt_tokens`, `completion_tokens`, `cached_tokens` (if reported), the pre-call estimate and its error.
 - Per compaction:
   - reason (threshold or overflow) and stage (mask, summary or fallback);

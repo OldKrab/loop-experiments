@@ -1,6 +1,6 @@
 # Tool errors: feed back to the model, or handle in the harness?
 
-Research input for TASK.md question 2: "which tool errors should be returned to the model for self-correction, and which should be intercepted deterministically at the harness level?" Scope: error handling only. Dynamic tool loading and context compaction are covered elsewhere; compaction appears here only as the response to a context-overflow error.
+Research input for question 2 of the task: "which tool errors should be returned to the model for self-correction, and which should be intercepted deterministically at the harness level?" Scope: error handling only. Dynamic tool loading and context compaction are covered elsewhere; compaction appears here only as the response to a context-overflow error.
 
 ## Sources and method
 
@@ -506,7 +506,7 @@ This is design input, mapped to `baseline/agent.py` gaps (line numbers are in th
 21. Lower `MAX_TURNS` (L10) to a realistic value, and add a token/cost budget. On the last turn send `tool_choice: "none"` so the model must summarise (opencode).
 
 **Observability** (this repo has only `print` with a 500-char preview, L88).
-22. Log one structured record per turn: request id, attempt number, HTTP status, retry delay, `finish_reason`, token usage, each tool call (name, args hash, duration, exit code, output size, truncated?, error class), and any loop-detector decision. These are the fields needed to tell transient, model and harness errors apart after the fact, and to measure the before/after numbers TASK.md asks for.
+22. Log one structured record per turn: request id, attempt number, HTTP status, retry delay, `finish_reason`, token usage, each tool call (name, args hash, duration, exit code, output size, truncated?, error class), and any loop-detector decision. These are the fields needed to tell transient, model and harness errors apart after the fact, and to measure the before/after numbers the task asks for.
 
 ---
 
